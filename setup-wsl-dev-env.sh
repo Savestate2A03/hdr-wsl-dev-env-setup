@@ -551,7 +551,7 @@ Use this shell setup before working in a normal terminal:
   source "$ENV_ROOT/env.sh"
 
 Open the repo in VS Code from Windows:
-  \\wsl.localhost\Ubuntu-{xx.yy}\home\{username}\{hdr-dev-folder}\open-wsl-vscode.bat
+  \\\\wsl.localhost\\Ubuntu-{xx.yy}\\home\\{username}\\{hdr-dev-folder}\\open-wsl-vscode.bat
 
 Build check:
   cd "$REPO_ROOT"
