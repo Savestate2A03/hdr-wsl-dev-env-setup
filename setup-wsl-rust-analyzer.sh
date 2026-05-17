@@ -4,40 +4,71 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 if [[ -n "${HDR_REPO_ROOT:-}" ]]; then
-    repo_root="$HDR_REPO_ROOT"
+  repo_root="$HDR_REPO_ROOT"
 elif repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-    :
+  :
 elif [[ -d "$script_dir/HewDraw-Remix/.git" ]]; then
-    repo_root="$script_dir/HewDraw-Remix"
+  repo_root="$script_dir/HewDraw-Remix"
 elif [[ -d "$PWD/HewDraw-Remix/.git" ]]; then
-    repo_root="$PWD/HewDraw-Remix"
+  repo_root="$PWD/HewDraw-Remix"
 else
-    echo "ERROR: Could not find HewDraw-Remix."
-    echo "Run this from the repo, place it next to HewDraw-Remix, or set HDR_REPO_ROOT."
-    exit 1
+  echo "ERROR: Could not find HewDraw-Remix."
+  echo "Run this from the repo, place it next to HewDraw-Remix, or set HDR_REPO_ROOT."
+  exit 1
+fi
+cd "$repo_root"
+
+# ------------------------------------------------------------------------------
+
+if [[ -z "${HDR_REPO_ROOT:-}" ]]; then
+  export HDR_REPO_ROOT="$repo_root"
+  repo_verb="Exporting"
+else
+  repo_verb="Using existing"
 fi
 
-cd "$repo_root"
+echo ""
+
+print_banner \
+  --level INFO --title "HDR Repository Root" \
+  "$repo_verb environment variable ${_PB_BLUE}\$HDR_REPO_ROOT${_PB_RESET}:" \
+  "  -> \"${_PB_GREEN}$HDR_REPO_ROOT\"${_PB_RESET}"
+
+# ------------------------------------------------------------------------------
+
+if [[ -z "${HDR_SD_HOME_DIR:-}" ]]; then
+  echo ""
+  export HDR_SD_HOME_DIR="/tmp/nothing"
+  print_banner \
+    --level INFO --title "HDR SD Home Directory" \
+    "${_PB_BLUE}\$HDR_SD_HOME_DIR${_PB_RESET} not previously set!" \
+    "Exporting environment variable ${_PB_BLUE}\$HDR_SD_HOME_DIR${_PB_RESET}:" \
+    "  -> \"${_PB_GREEN}$HDR_SD_HOME_DIR\"${_PB_RESET} (modify this in env.sh after setup)"
+fi
+
+# ------------------------------------------------------------------------------
+
+echo ""
 
 cargo_home="${CARGO_HOME:-$HOME/.cargo}"
 skyline_target="$cargo_home/skyline/aarch64-skyline-switch.json"
 local_target=".cargo/aarch64-skyline-switch.json"
 
 ensure_skyline_target_json() {
-    local skyline_dir="$cargo_home/skyline"
-    local linker_script="$skyline_dir/link.T"
-    local source_linker=""
+  local skyline_dir="$cargo_home/skyline"
+  local linker_script="$skyline_dir/link.T"
+  local source_linker=""
 
-    mkdir -p "$skyline_dir"
+  mkdir -p "$skyline_dir"
 
-    source_linker="$(find "$cargo_home/registry/src" -path '*/cargo-skyline-*/src/link.T' -print 2>/dev/null | sort -V | tail -n 1 || true)"
-    if [[ -n "$source_linker" ]]; then
-        cp "$source_linker" "$linker_script"
-    elif [[ ! -f "$linker_script" ]]; then
-        return 1
-    fi
+  source_linker="$(find "$cargo_home/registry/src" -path '*/cargo-skyline-*/src/link.T' -print 2>/dev/null | sort -V | tail -n 1 || true)"
+  if [[ -n "$source_linker" ]]; then
+    cp "$source_linker" "$linker_script"
+  elif [[ ! -f "$linker_script" ]]; then
+    return 1
+  fi
 
-    python3 - "$skyline_target" "$linker_script" <<'PY'
+  python3 - "$skyline_target" "$linker_script" <<'PY'
 import json
 import os
 import sys
@@ -91,16 +122,16 @@ PY
 }
 
 if [[ ! -f "$skyline_target" ]]; then
-    ensure_skyline_target_json || true
+  ensure_skyline_target_json || true
 fi
 
 if [[ ! -f "$skyline_target" ]]; then
-	echo "ERROR: Skyline target JSON not found:"
-	echo "  $skyline_target"
-	echo
-	echo "Try running:"
-	echo "  ./setup-wsl-dev-env.sh"
-	exit 1
+  echo "ERROR: Skyline target JSON not found:"
+  echo "  $skyline_target"
+  echo
+  echo "Try running:"
+  echo "  ./setup-wsl-dev-env.sh"
+  exit 1
 fi
 
 mkdir -p .cargo .vscode
@@ -182,6 +213,7 @@ managed_keys = [
     "rust-analyzer.check.allTargets",
     "rust-analyzer.cargo.targetDir",
     "files.exclude",
+    "editor.rulers",
     end_marker,
 ]
 
@@ -194,6 +226,8 @@ existing_extra_env.update({
     "CARGO_HOME": os.environ.get("CARGO_HOME"),
     "RUSTUP_HOME": os.environ.get("RUSTUP_HOME"),
     "GH_CONFIG_DIR": os.environ.get("GH_CONFIG_DIR"),
+    "HDR_REPO_ROOT": os.environ.get("HDR_REPO_ROOT"),
+    "HDR_SD_HOME_DIR": os.environ.get("HDR_SD_HOME_DIR"),
     "RUSTFLAGS": "--cfg skyline_std_v3",
     "SKYLINE_ADD_NRO_HEADER": "1",
 })
@@ -231,6 +265,16 @@ managed_block = {
     "rust-analyzer.check.allTargets": False,
     "rust-analyzer.cargo.targetDir": "target/rust-analyzer",
     "files.exclude": { "**/.git": False },
+    "editor.rulers" : [
+        { "column": 80, "color": "#00ff0044" },
+        { "column": 79, "color": "#00ff0008" },
+        { "column": 120, "color": "#ffff0044" },
+        { "column": 119, "color": "#ffff0010" },
+        { "column": 140, "color": "#ff000064" },
+        { "column": 139, "color": "#ff000028" },
+        { "column": 160, "color": "#0044ff88" },
+        { "column": 159, "color": "#0044ff42" },
+    ],
     end_marker: None,
 }
 
