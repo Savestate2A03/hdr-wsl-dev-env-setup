@@ -29,20 +29,24 @@ Here is an example for my setup:
     "json-target-spec"
   ],
   "rust-analyzer.cargo.extraEnv": {
-    "CARGO_HOME": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/cargo",
-    "RUSTUP_HOME": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/rustup",
-    "GH_CONFIG_DIR": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/gh-config",
+    "CARGO_HOME": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/cargo",
+    "RUSTUP_HOME": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/rustup",
+    "GH_CONFIG_DIR": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/gh-config",
+    "HDR_REPO_ROOT": "/home/savestate/dev/hewdraw-dev/HewDraw-Remix",
+    "HDR_SD_HOME_DIR": "/mnt/c/Users/Savestate/dev/HDR Download AIO/YUZU_HDR/user/sdmc",
     "RUSTFLAGS": "--cfg skyline_std_v3",
     "SKYLINE_ADD_NRO_HEADER": "1",
-    "PATH": "BIG_PATH_STRING_HERE"
+    "PATH": "BIG_PATH_REMOVED"
   },
   "terminal.integrated.env.linux": {
-    "CARGO_HOME": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/cargo",
-    "RUSTUP_HOME": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/rustup",
-    "GH_CONFIG_DIR": "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/gh-config",
+    "CARGO_HOME": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/cargo",
+    "RUSTUP_HOME": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/rustup",
+    "GH_CONFIG_DIR": "/home/savestate/dev/hewdraw-dev/.hdr-wsl-dev/gh-config",
+    "HDR_REPO_ROOT": "/home/savestate/dev/hewdraw-dev/HewDraw-Remix",
+    "HDR_SD_HOME_DIR": "/mnt/c/Users/Savestate/dev/HDR Download AIO/YUZU_HDR/user/sdmc",
     "RUSTFLAGS": "--cfg skyline_std_v3",
     "SKYLINE_ADD_NRO_HEADER": "1",
-    "PATH": "BIG_PATH_STRING_HERE"
+    "PATH": "BIG_PATH_REMOVED"
   },
   "rust-analyzer.check.extraArgs": [
     "-Z",
@@ -55,6 +59,40 @@ Here is an example for my setup:
   "files.exclude": {
     "**/.git": false
   },
+  "editor.rulers": [
+    {
+      "column": 80,
+      "color": "#00ff0044"
+    },
+    {
+      "column": 79,
+      "color": "#00ff0008"
+    },
+    {
+      "column": 120,
+      "color": "#ffff0044"
+    },
+    {
+      "column": 119,
+      "color": "#ffff0010"
+    },
+    {
+      "column": 140,
+      "color": "#ff000064"
+    },
+    {
+      "column": 139,
+      "color": "#ff000028"
+    },
+    {
+      "column": 160,
+      "color": "#0044ff88"
+    },
+    {
+      "column": 159,
+      "color": "#0044ff42"
+    }
+  ],
   "===== END CARGO-SKYLINE SETTINGS FROM setup-wsl-rust-analyzer.sh =====": null
 }
 ```
@@ -80,10 +118,119 @@ Adds `.cargo/config.toml` with the following content (allows specifying a target
 json-target-spec = true
 ```
 
+Modifies `scripts/build-wsl.sh` to add new options: 
+```bash
+#!/bin/bash
+original_build_wsl() {
+  script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+  repo_root=$(dirname "$script_dir")
+  
+  app_data="$(wslpath $(cmd.exe /c echo %AppData%))"
+  ryujinx_path="${app_data::-1}/Ryujinx" # remove the carriage return because Windows and WSL are both stupid
+  mod_path="$ryujinx_path/mods/contents/01006a800016e000/skyline/romfs/skyline/plugins"
+  base_path="$ryujinx_path/sdcard/ultimate/mods/HDR-Base"
+  
+  # do this before getting the rom files because this will update them
+  cd "$repo_root/plugin"
+  cargo skyline build --release
+  cp target/aarch64-skyline-switch/release/libhdr.nro "$mod_path/libhdr.nro"
+  
+  files=$(find "$repo_root/romfs/build" -type f -name "*.prc" -print)
+  for file in $files;
+  do
+      local_path=${file#"$repo_root/romfs/build"}
+      full_rom_path=$base_path$local_path
+      mkdir -p $(dirname "$full_rom_path")
+      cp $file $full_rom_path
+  done
+}
+
+HDR_TEMP_CURRENT_DIR="$PWD"
+
+restore_dir() {
+    cd "$HDR_TEMP_CURRENT_DIR" 2>/dev/null || true
+}
+
+fail_deploy() {
+    echo "Deploy aborted: $1"
+    restore_dir
+    exit 1
+}
+
+DEPLOY=false
+CLEAN=false
+NEW=false
+
+shopt -s nocasematch
+for arg in "$@"; do
+    case "$arg" in
+        --deploy)
+            DEPLOY=true
+            ;;
+        --clean)
+            CLEAN=true
+            ;;
+        --new)
+            NEW=true
+            ;;
+    esac
+done
+shopt -u nocasematch
+
+if [[ "$NEW" != true ]]; then
+    original_build_wsl
+    restore_dir
+    exit $?
+fi
+
+if [[ "${HDR_DEV_ENV_ACTIVE:-}" != "1" ]]; then
+    fail_deploy "HDR_DEV_ENV_ACTIVE is not set to 1. This should be set automatically by .hdr-wsl-dev/env.sh or by running open-wsl-vscode.bat."
+fi
+
+if [[ -z "${HDR_REPO_ROOT:-}" ]]; then
+    fail_deploy "HDR_REPO_ROOT is not set. This should be set automatically by .hdr-wsl-dev/env.sh or by running open-wsl-vscode.bat."
+fi
+
+if [[ -z "${HDR_SD_HOME_DIR:-}" ]]; then
+    fail_deploy "HDR_SD_HOME_DIR is not set. Modify your .hdr-wsl-dev/env.sh or VS Code settings.json."
+fi
+
+if [[ ! -d "$HDR_SD_HOME_DIR/ultimate/mods" ]]; then
+    fail_deploy "$HDR_SD_HOME_DIR/ultimate/mods does not exist. Check that HDR_SD_HOME_DIR is correct in your env.sh script or VS Code settings.json."
+fi
+
+cd "$HDR_REPO_ROOT" || fail_deploy "Could not cd to HDR_REPO_ROOT: $HDR_REPO_ROOT"
+
+if [[ "$CLEAN" == true ]]; then
+	echo "Cleaning..."
+    cargo-skyline skyline clean-project || fail_deploy "cargo-skyline clean-project failed."
+fi
+
+cargo-skyline skyline build --release || fail_deploy "cargo-skyline build failed."
+cd scripts || fail_deploy "Could not cd to scripts directory."
+python3 build.py --release || fail_deploy "python3 build.py failed."
+
+if [[ "$DEPLOY" == true ]]; then
+	echo "Deploying..."
+	rm -rf "$HDR_SD_HOME_DIR/ultimate/mods/hdr"
+	rm -rf "$HDR_SD_HOME_DIR/ultimate/mods/hdr-dev"
+	rm -rf "$HDR_SD_HOME_DIR/ultimate/mods/hdr-pr"
+	rm -rf "$HDR_SD_HOME_DIR/ultimate/mods/hdr-wsl-deploy"
+	mkdir -p "$HDR_SD_HOME_DIR/ultimate/mods/hdr-wsl-deploy"
+	cp -a "$HDR_REPO_ROOT/build/hdr-switch/ultimate/mods/hdr-dev/." \
+		"$HDR_SD_HOME_DIR/ultimate/mods/hdr-wsl-deploy/" \
+		|| fail_deploy "Failed to copy hdr-dev files to hdr-wsl-deploy."
+fi
+
+restore_dir
+```
+
 Appends the lines to the user's local `.git/info/exclude` for HewDraw-Remix:
 ```.gitignore
 # generated rust toolchain file from HDR WSL setup script
 rust-toolchain.toml
+# modified build-wsl.sh file
+scripts/build-wsl.sh
 ```
 
 # Setup
@@ -151,10 +298,10 @@ Download the latest release of the setup scripts, and run `setup-wsl-dev-env.sh`
 ```bash
 # Current Directory: "~/hdr-dev"
 sudo apt install unzip # if necessary
-curl -L https://github.com/Savestate2A03/hdr-wsl-dev-env-setup/releases/download/v1.0/hdr-dev-env-scripts.zip -o scripts.zip
+curl -L https://github.com/Savestate2A03/hdr-wsl-dev-env-setup/releases/download/v1.1/hdr-dev-env-scripts.zip -o scripts.zip
 unzip scripts.zip -d .
 rm scripts.zip
-chmod 755 setup-*.sh open-*.bat # make executable
+chmod 755 setup-*.sh # make executable
 ./setup-wsl-dev-env.sh
 ```
 
@@ -168,195 +315,66 @@ Get:5 http://security.ubuntu.com/ubuntu noble-security/main Translation-en [264 
 ...
 ```
 
-Once packages finish installing, log into **GitHub** when prompted:
+Once packages finish installing, provide values for the setup variables (**Make sure to not use the default SD_HOME_DIR!**) \
+You will see that I am using my own fork of HDR instead of the default here as well:
 
-```txt
-==> Installing GitHub CLI locally
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-100 13.6M  100 13.6M    0     0  39.6M      0 --:--:-- --:--:-- --:--:-- 39.6M
+<img width="904" height="331" alt="image" src="https://github.com/user-attachments/assets/032bf512-c022-475d-ab08-1fc3907939e6" />
 
-==> Checking GitHub login
-The setup will open a GitHub login flow now.
-This keeps GitHub credentials under the local .hdr-wsl-dev folder for this workspace.
-? Authenticate Git with your GitHub credentials? Yes
+Log into **GitHub** when prompted and `HewDraw-Remix` will be cloned:
 
-! First copy your one-time code: ABCD-EF12
-Press Enter to open https://github.com/login/device in your browser...
-! Failed opening a web browser at https://github.com/login/device
-  exec: "xdg-open,x-www-browser,www-browser,wslview": executable file not found in $PATH
-  Please try entering the URL in your browser manually
-✓ Authentication complete.
-- gh config set -h github.com git_protocol https
-✓ Configured git protocol
-! Authentication credentials saved in plain text
-✓ Logged in as YourGitHubUsernameHere
-```
-
-`HewDraw-Remix` will be cloned:
-
-```txt
-==> Cloning HewDraw-Remix
-Cloning into '/home/savestate/hdr-dev/HewDraw-Remix'...
-remote: Enumerating objects: 210422, done.
-remote: Counting objects: 100% (11639/11639), done.
-remote: Compressing objects: 100% (4563/4563), done.
-remote: Total 210422 (delta 7548), reused 10283 (delta 6583), pack-reused 198783 (from 2)
-Receiving objects: 100% (210422/210422), 125.14 MiB | 69.12 MiB/s, done.
-Resolving deltas: 100% (120504/120504), done.
-```
+<img width="734" height="481" alt="image" src="https://github.com/user-attachments/assets/f15fa9e5-4b6c-4cdf-ab5a-74ea2dd97520" />
 
 `rustc 1.95.0-nightly` will be installed:
-```txt
-==> Installing Rust toolchain nightly-2026-02-14
-info: syncing channel updates for nightly-2026-02-14-x86_64-unknown-linux-gnu
-info: latest update on 2026-02-14 for version 1.95.0-nightly (a423f68a0 2026-02-13)
-info: downloading 6 components
-        cargo installed                       10.49 MiB
-       clippy installed                        4.46 MiB
-    rust-docs installed                       20.91 MiB
-     rust-std installed                       28.18 MiB
-        rustc installed                       76.39 MiB
-      rustfmt installed                        2.08 MiB
-  nightly-2026-02-14-x86_64-unknown-linux-gnu installed - rustc 1.95.0-nightly (a423f68a0 2026-02-13)
 
-info: default toolchain set to nightly-2026-02-14-x86_64-unknown-linux-gnu
-info: checking for self-update (current version: 1.29.0)
-info: using existing install for nightly-2026-02-14-x86_64-unknown-linux-gnu
-info: default toolchain set to nightly-2026-02-14-x86_64-unknown-linux-gnu
-
-  nightly-2026-02-14-x86_64-unknown-linux-gnu unchanged - rustc 1.95.0-nightly (a423f68a0 2026-02-13)
-```
+<img width="819" height="956" alt="image" src="https://github.com/user-attachments/assets/22fc5af9-8fad-4f02-bbf4-62f33913762c" />
 
 `cargo-skyline` will be compiled/installed:
 
-```txt
-==> Installing cargo-skyline
-    Updating crates.io index
-  Downloaded cargo-skyline v3.5.0
-  Downloaded 1 crate (34.5KiB) in 0.03s
-  Installing cargo-skyline v3.5.0
-    Updating crates.io index
-     Locking 292 packages to latest compatible versions
-      Adding bytes v1.1.0 (available: v1.11.1)
-      Adding cargo_metadata v0.10.0 (available: v0.23.1)
-...
-   Compiling linkle v0.2.11
-   Compiling tokio-rustls v0.24.1
-   Compiling hyper-rustls v0.24.2
-   Compiling reqwest v0.11.27
-   Compiling cargo-skyline-octocrab v0.1rm6.0
-    Finished `release` profile [optimized] target(s) in 25.24s
-  Installing /home/savestate/hdr-dev/.hdr-wsl-dev/cargo/bin/cargo-skyline
-   Installed package `cargo-skyline v3.5.0` (executable `cargo-skyline`)
-
-==> Installing Skyline std and target files
-info: syncing channel updates for nightly-2026-02-14-x86_64-unknown-linux-gnu
-
-  nightly-2026-02-14-x86_64-unknown-linux-gnu unchanged - rustc 1.95.0-nightly (a423f68a0 2026-02-13)
-
-info: checking for self-update (current version: 1.29.0)
-```
+<img width="784" height="472" alt="image" src="https://github.com/user-attachments/assets/3665a0ec-273d-461e-a454-6650ebc7a72e" />
 
 Skyline `std`/target files will be compiled/installed:
 
-```txt
-==> Installing Skyline std and target files
-info: syncing channel updates for nightly-2026-02-14-x86_64-unknown-linux-gnu
-
-  nightly-2026-02-14-x86_64-unknown-linux-gnu unchanged - rustc 1.95.0-nightly (a423f68a0 2026-02-13)
-
-info: checking for self-update (current version: 1.29.0)
-
-Cloning into '/home/savestate/hdr-dev/.hdr-wsl-dev/cargo/skyline/toolchain/skyline/lib/rustlib/src/rust'...
-remote: Enumerating objects: 61171, done.
-remote: Counting objects: 100% (61171/61171), done.
-remote: Compressing objects: 100% (53289/53289), done.
-Receiving objects: 100% (61171/61171), 44.14 MiB | 12.54 MiB/s, done.
-remote: Total 61171 (delta 7697), reused 28724 (delta 6028), pack-reused 0 (from 0)
-Resolving deltas: 100% (7697/7697), done.
-Updating files: 100% (58144/58144), done.
-Submodule 'library/backtrace' (https://github.com/rust-lang/backtrace-rs.git) registered for path 'library/backtrace'
-Submodule 'src/doc/book' (https://github.com/rust-lang/book.git) registered for path 'src/doc/book'
-...
-Receiving objects: 100% (181/181), 118.59 KiB | 7.91 MiB/s, done.
-Resolving deltas: 100% (113/113), completed with 101 local objects.
-From https://github.com/rust-lang/rustc-perf
- * branch            c0301bc44d175b9b2c5442b25049475c39d7700c -> FETCH_HEAD
-Submodule path 'src/tools/rustc-perf': checked out 'c0301bc44d175b9b2c5442b25049475c39d7700c'
-```
+<img width="1111" height="743" alt="image" src="https://github.com/user-attachments/assets/f4b0a63d-d87f-4f46-980a-9651d61a3713" />
 
 Target JSON file will be updated:
 
-```txt
-Updated Skyline target JSON:
-  /home/savestate/hdr-dev/.hdr-wsl-dev/cargo/skyline/aarch64-skyline-switch.json
-
-==> Skyline target cfg
-target_arch="aarch64"
-target_feature="aes"
-target_feature="crc"
-target_feature="neon"
-target_feature="sha2"
-target_os="switch"
-```
+<img width="719" height="190" alt="image" src="https://github.com/user-attachments/assets/bbba8f63-f0fd-4768-8fb8-5b9a5bf5d710" />
 
 `rust-analyzer` will be configured properly:
 
-```txt
-==> Setting up rust-analyzer
-Linked Skyline target:
-  .cargo/aarch64-skyline-switch.json -> /home/savestate/hdr-dev/.hdr-wsl-dev/cargo/skyline/aarch64-skyline-switch.json
-Updated .cargo/config.toml
-Updated .vscode/settings.json
+<img width="1028" height="213" alt="image" src="https://github.com/user-attachments/assets/4f2612a8-e070-49ac-bfee-4865cfde67a5" />
 
-==> Done
-```
+Some final output information about directories, the environment, building, and helpful aliases will be provided:
 
-Some final output information will be provided:
+<img width="1278" height="902" alt="image" src="https://github.com/user-attachments/assets/4a5070c6-894c-48f4-9495-eab595365336" />
 
-```txt
-Repo:
-  /home/savestate/hdr-dev/HewDraw-Remix
-
-Local environment:
-  /home/savestate/hdr-dev/.hdr-wsl-dev
-
-Use this shell setup before working in a normal terminal:
-  source "/home/savestate/hdr-dev/.hdr-wsl-dev/env.sh"
-
-Open the repo in VS Code from Windows:
-  \\wsl.localhost\Ubuntu-{xx.yy}\home\{username}\{hdr-dev-folder}\open-wsl-vscode.bat
-
-Build check (after running source env above):
-  cd "/home/savestate/hdr-dev/HewDraw-Remix"
-  cargo skyline build --release
-```
+**Do add the aliases!!!**
 
 ## Entering the HDR Development Environment
 
 ### From the Command Line
-If you intend to run build commands from the command-line directly, run the provided `env.sh` script via `source`
-
-```txt
-savestate@DESKTOP-J27L40L:~/dev/hdr-dev$ source "/home/savestate/dev/hdr-dev/.hdr-wsl-dev/env.sh"
-([HDR]) savestate@DESKTOP-J27L40L:~/dev/hdr-dev/HewDraw-Remix$
-```
+If you intend to run build commands from the command-line directly, run the alias `start-hdr` if added \
+...or run the provided `env.sh` script via `source`.
 
 Note: You will be given an indication that you are in the **HDR Dev Env** in your shell: `([HDR])`. To exit, type in the command `leave-hdr`.
 
+<img width="692" height="122" alt="image" src="https://github.com/user-attachments/assets/1f2ad845-6d75-4223-b424-bd5c059fc2bb" />
+
 Build once you are in the **HDR Dev Env**:
 
-```bash
-cargo skyline build --release
-```
+<img width="1209" height="320" alt="image" src="https://github.com/user-attachments/assets/7b55c6fc-e018-416c-abf1-0d459d16c396" />
+
+<img width="1097" height="230" alt="image" src="https://github.com/user-attachments/assets/474f8b33-b613-48c2-9816-c0f8525996d6" />
+
+Deploy to your SD card:
+
+<img width="1220" height="861" alt="image" src="https://github.com/user-attachments/assets/12e364ce-629a-4212-a892-f5c55d647860" />
 
 ### Directly in VSCode
 
-Launching VSCode in the **HDR Dev Env**:
-- Navigate to your WSL network drive: `\\wsl.localhost\Ubuntu-xx.yy\home\username\dev\hdr-dev` (example)
-- Double click `open-wsl-vscode.bat`
+Run the alias `start-hdr-vscode` if added, or run the provided powershell command in the info block:
+
+<img width="1042" height="76" alt="image" src="https://github.com/user-attachments/assets/5fb11bd3-ae30-437a-8484-36058680ec4f" />
 
 On first launch:
 - Click "I trust the authors" when prompted by VSCode
@@ -367,6 +385,5 @@ On first launch:
 - Double check all are installed and enabled in the workspace
 
 **Before**:<br><img width="693" height="392" alt="image" src="https://github.com/user-attachments/assets/3f28d23d-7729-4f2f-871c-968412326233" />
-
 
 **After**:<br><img width="693" height="535" alt="image" src="https://github.com/user-attachments/assets/901777ad-11bd-4ee1-8f09-a49dd966bcfe" />
