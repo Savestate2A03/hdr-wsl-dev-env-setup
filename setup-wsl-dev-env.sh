@@ -1133,7 +1133,7 @@ if [[ "$CLEAN" == true ]]; then
     cargo-skyline skyline clean-project || fail_deploy "cargo-skyline clean-project failed."
 fi
 
-cargo-skyline skyline build --release || fail_deploy "cargo-skyline build failed."
+# cargo-skyline skyline build --release || fail_deploy "cargo-skyline build failed."
 cd scripts || fail_deploy "Could not cd to scripts directory."
 python3 build.py --release || fail_deploy "python3 build.py failed."
 
