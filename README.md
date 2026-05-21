@@ -298,7 +298,7 @@ Download the latest release of the setup scripts, and run `setup-wsl-dev-env.sh`
 ```bash
 # Current Directory: "~/hdr-dev"
 sudo apt install unzip # if necessary
-curl -L https://github.com/Savestate2A03/hdr-wsl-dev-env-setup/releases/download/v1.1/hdr-dev-env-scripts.zip -o scripts.zip
+curl -L https://github.com/Savestate2A03/hdr-wsl-dev-env-setup/releases/download/v1.2/hdr-dev-env-scripts.zip -o scripts.zip
 unzip scripts.zip -d .
 rm scripts.zip
 chmod 755 setup-*.sh # make executable
